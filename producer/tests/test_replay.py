@@ -1,5 +1,7 @@
 import json
+
 from producer import replay
+
 
 def make_event(index, minute, second, period=1, team="Argentina"):
     return {"index": index, "minute": minute, "second": second,
@@ -28,7 +30,9 @@ def test_replay_delays_are_capped():
     assert delays[1] == 3.0
 
 class FakeProducer:
-    def __init__(self): self.messages = []; self.flushed = False
+    def __init__(self):
+        self.messages = []
+        self.flushed = False
     def produce(self, topic, key, value): self.messages.append((topic, key, value))
     def poll(self, _): pass
     def flush(self): self.flushed = True

@@ -5,6 +5,7 @@ This makes them fast to unit-test without any infrastructure.
 """
 from __future__ import annotations
 
+
 def match_second(minute: int, second: int) -> int:
     return minute * 60 + second
 

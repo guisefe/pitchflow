@@ -1,6 +1,10 @@
 """Silver: parse Bronze raw JSON into typed, deduplicated event rows."""
 import logging
-from pyspark.sql import DataFrame, functions as F, types as T
+
+from pyspark.sql import DataFrame
+from pyspark.sql import functions as F
+from pyspark.sql import types as T
+
 from streaming.config import BRONZE_PATH, CHECKPOINT_DIR, SILVER_PATH
 from streaming.session import get_spark
 

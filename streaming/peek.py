@@ -1,7 +1,10 @@
 """Quick inspector for a Delta table — no Spark session needed."""
 import sys
+
 from deltalake import DeltaTable
+
 from streaming.config import BRONZE_PATH
+
 
 def main() -> None:
     path = sys.argv[1] if len(sys.argv) > 1 else BRONZE_PATH

@@ -1,6 +1,8 @@
 """Bronze: read the Kafka match-event stream and land raw events into Delta."""
 import logging
+
 from pyspark.sql import functions as F
+
 from streaming.config import BRONZE_PATH, CHECKPOINT_DIR, KAFKA_BROKER, MATCH_TOPIC
 from streaming.session import get_spark
 

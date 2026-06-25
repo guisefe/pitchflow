@@ -1,5 +1,6 @@
 """Spark session factory shared by all streaming jobs (Delta + Kafka wired in)."""
 import logging
+
 from delta import configure_spark_with_delta_pip
 from pyspark.sql import SparkSession
 

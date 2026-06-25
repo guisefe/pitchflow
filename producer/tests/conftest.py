@@ -1,5 +1,6 @@
 import pytest
 
+
 class FakeResponse:
     def __init__(self, json_data, status_code=200):
         self._json = json_data

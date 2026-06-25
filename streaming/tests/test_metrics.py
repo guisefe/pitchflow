@@ -1,8 +1,15 @@
 import pytest
+
 from streaming.metrics import (
-    match_second, match_minute_label,
-    is_shot, is_goal, is_attacking, safe_xg, win_probability,
+    is_attacking,
+    is_goal,
+    is_shot,
+    match_minute_label,
+    match_second,
+    safe_xg,
+    win_probability,
 )
+
 
 def test_match_second_kickoff(): assert match_second(0, 0) == 0
 def test_match_second_mid(): assert match_second(1, 30) == 90
