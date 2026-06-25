@@ -48,7 +48,7 @@ def parse_and_flatten(df: DataFrame, kafka_ts_col: str = "kafka_timestamp") -> D
         F.coalesce(F.col("_e.shot.statsbomb_xg"), F.lit(0.0)).alias("xg"),
         F.col("_e.shot.outcome.name").alias("shot_outcome"),
         F.col(kafka_ts_col).alias("event_time"),
-    ).filter(F.col("event_id").isNotNull())
+    ).filter(F.col("event_id").isNotNull() & (F.col("period") <= 4))
 
 def run() -> None:
     spark = get_spark("pitchflow-silver")

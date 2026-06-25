@@ -36,7 +36,8 @@ def safe_xg(xg_value) -> float:
 
 def win_probability(goal_diff: int, xg_diff: float, minutes_remaining: float) -> float:
     import math
-    time_factor = 1.0 - (minutes_remaining / 130.0)
+    minutes_remaining = max(0, min(90, minutes_remaining))
+    time_factor = 1.0 - (minutes_remaining / 90.0)
     goal_weight = 1.5 + 2.0 * time_factor
     xg_weight = 0.6 * (1.0 - time_factor)
     logit = goal_weight * goal_diff + xg_weight * xg_diff
