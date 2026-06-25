@@ -51,3 +51,7 @@ test:
 .PHONY: gold
 gold:
 	python -m streaming.gold
+
+.PHONY: dashboard
+dashboard:
+	streamlit run dashboard/app.py --server.port 8501
