@@ -33,3 +33,10 @@ test:
 clean:
 	docker compose down -v
 	rm -f data/events_*.json
+
+.PHONY: bronze peek
+bronze:
+	python -m streaming.bronze
+
+peek:
+	python -m streaming.peek
