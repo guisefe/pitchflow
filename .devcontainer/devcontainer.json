@@ -1,0 +1,56 @@
+{
+  // pitchflow dev container — opens the repo ready to run in GitHub Codespaces
+  // or any Dev Containers-compatible editor. "Open in Codespaces" => everything
+  // installed, Docker available, ports forwarded.
+  "name": "pitchflow",
+
+  // Python 3.11 base maintained by the Dev Containers team.
+  "image": "mcr.microsoft.com/devcontainers/python:3.11",
+
+  "features": {
+    // Lets `docker compose` run inside the codespace (Redpanda, Spark, etc.).
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+
+  // The streaming stack (Spark + Kafka) needs real memory. Pinning a minimum
+  // guarantees the heavy pipeline runs — at the cost of faster free-tier burn
+  // (a 4-core machine uses ~2x core-hours vs 2-core). Drop to 2 cores for light
+  // dev (producer/tests) to conserve hours.
+  "hostRequirements": {
+    "cpus": 4,
+    "memory": "16gb",
+    "storage": "32gb"
+  },
+
+  // Install Python deps once the container is built.
+  "postCreateCommand": "pip install --upgrade pip && pip install -r requirements.txt",
+
+  // Friendly reminder on every start.
+  "postStartCommand": "echo 'pitchflow ready. Run: make up && make download && make replay'",
+
+  // Auto-forward the UIs so they open in the browser.
+  "forwardPorts": [8080, 8501, 4040, 19092, 9644],
+  "portsAttributes": {
+    "8080": { "label": "Redpanda Console", "onAutoForward": "notify" },
+    "8501": { "label": "Streamlit Dashboard", "onAutoForward": "openBrowser" },
+    "4040": { "label": "Spark UI", "onAutoForward": "silent" },
+    "19092": { "label": "Kafka (Redpanda)", "onAutoForward": "ignore" },
+    "9644": { "label": "Redpanda Admin", "onAutoForward": "ignore" }
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-azuretools.vscode-docker",
+        "charliermarsh.ruff",
+        "redhat.vscode-yaml"
+      ],
+      "settings": {
+        "python.testing.pytestEnabled": true,
+        "python.testing.pytestArgs": ["producer", "streaming"]
+      }
+    }
+  }
+}

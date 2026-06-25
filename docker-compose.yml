@@ -1,0 +1,32 @@
+# Single-node Redpanda (Kafka-compatible) + web console.
+# Redpanda is a single binary — far lighter than a full Kafka + ZooKeeper stack.
+services:
+  redpanda:
+    image: redpandadata/redpanda:v24.1.7
+    container_name: pitchflow-redpanda
+    command:
+      - redpanda start
+      - --smp 1
+      - --memory 1G
+      - --overprovisioned
+      - --node-id 0
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
+    ports:
+      - "19092:19092"   # external Kafka API (producer/consumer from host)
+      - "9644:9644"     # admin API
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -q 'Healthy:.*true'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  console:
+    image: redpandadata/console:v2.6.0
+    container_name: pitchflow-console
+    depends_on:
+      - redpanda
+    ports:
+      - "8080:8080"     # web UI to watch the live event stream
+    environment:
+      KAFKA_BROKERS: redpanda:9092
