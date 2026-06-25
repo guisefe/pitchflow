@@ -1,9 +1,32 @@
+# Python
 __pycache__/
 *.pyc
+*.pyo
+.venv/
+*.egg-info/
+
+# Environment
 .env
+
+# Test / coverage / lint
 .coverage
-data/*.json
-data/delta/
-spark-warehouse/
-checkpoints/
 .pytest_cache/
+.ruff_cache/
+htmlcov/
+
+# Data — never commit raw events, Delta tables, or Spark state
+data/events_*.json
+data/delta/
+data/checkpoints/
+data/catalog/
+
+# Spark / Java
+spark-warehouse/
+derby.log
+metastore_db/
+.ivy2/
+
+# IDE
+.vscode/
+.idea/
+*.swp

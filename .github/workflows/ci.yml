@@ -9,6 +9,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
@@ -17,11 +18,24 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install test dependencies
+      - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install confluent-kafka==2.4.0 requests==2.31.0 \
-                      pytest==8.2.0 pytest-cov==5.0.0 python-dotenv==1.0.1
+          # Only what tests need (no PySpark — too heavy for CI, tests don't require it)
+          pip install \
+            confluent-kafka==2.4.0 \
+            requests==2.31.0 \
+            python-dotenv==1.0.1 \
+            pytest==8.2.0 \
+            pytest-cov==5.0.0 \
+            ruff==0.4.4
 
-      - name: Run tests
-        run: pytest producer/tests/ -v --cov=producer --cov-report=term-missing
+      - name: Lint
+        run: ruff check producer/ streaming/ dashboard/
+
+      - name: Test
+        run: |
+          python -m pytest producer/tests/ streaming/tests/ \
+            -v --tb=short \
+            --cov=producer --cov=streaming \
+            --cov-report=term-missing
