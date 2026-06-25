@@ -1,33 +1,30 @@
 # pitchflow
 
-> **Streaming de eventos de partida de futebol em um lakehouse Delta em tempo real.**
-
-Replica dados reais do StatsBomb como um stream Kafka ao vivo, processa com Spark Structured Streaming em um medallion Bronze→Silver→Gold, e serve analytics ao vivo — corrida de xG, mapa de chutes, momentum, win probability — num dashboard Streamlit que atualiza a cada 3 segundos.
-
-**100% open-source. Roda local ou no GitHub Codespaces. Zero custo de dados.**
+> **Real-time football match-event streaming into a Delta lakehouse.**
+> Kafka · Spark Structured Streaming · Delta Lake · Streamlit · StatsBomb
 
 ![CI](https://github.com/guisefe/pitchflow/actions/workflows/ci.yml/badge.svg)
 [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/guisefe/pitchflow)
 
 ---
 
-## Por que este projeto existe
+## What this is
 
-### Por que streaming
+`pitchflow` is a real-time data platform that turns a football match into a live analytics feed. A replay producer streams real StatsBomb event data into Kafka in match-clock order. Spark Structured Streaming consumes the topic and writes a Bronze → Silver → Gold Delta Lake medallion. A Streamlit dashboard reads the Gold tables live and renders score, xG race, win probability, momentum and a shot map as the match unfolds.
 
-Quase todo portfólio de engenharia de dados é batch — jobs agendados sobre tabelas finitas. Streaming é a skill que separa o nível pleno do sênior, e é a mais demandada justamente porque é mais difícil: o dado nunca para de chegar, então você precisa raciocinar sobre *quando* é "agora", o que fazer com eventos que chegam atrasados, e como manter totais acumulados sem reler tudo. `pitchflow` existe pra provar essa skill de ponta a ponta.
+It runs locally with Docker Compose or one-click in GitHub Codespaces. No cloud bill, no paid data.
 
-### Por que futebol e por que StatsBomb
+---
 
-Um projeto de portfólio aterra melhor quando o domínio é real e o autor claramente se importa. O StatsBomb publica [dados de evento profissionais e gratuitos](https://github.com/statsbomb/open-data) — cada passe, conduç̃ao e chute, com o valor de expected goals (xG) e coordenadas do campo. É o dataset que a comunidade séria de football analytics usa de verdade.
+## Por que esse projeto
 
-### Por que event replay
+A maioria dos portfólios de engenharia de dados é batch — jobs agendados sobre tabelas finitas. Streaming é o que separa o nível pleno do sênior, e a curva é mais íngreme justamente porque o dado nunca para: é preciso raciocinar sobre *quando* é "agora", lidar com eventos atrasados e manter agregações com estado sem reler tudo.
 
-Feeds de eventos ao vivo são pagos. Em vez de pagar, o `pitchflow` *replica* uma partida real em ordem de relógio de jogo, a velocidade configurável — um jogo de 90 minutos streama em ~90 segundos. Isso não é um workaround: replay é um padrão de produção real (é assim que você faz backfill e reprocessa dados históricos por um sistema de streaming), e torna o pipeline **determinístico e reproduzível**.
+Esse projeto foi construído pra demonstrar essas habilidades de ponta a ponta — com a mesma stack que uso no Databricks (Spark + Delta + Medallion), aplicada à sua forma mais difícil: stream contínuo em vez de batch.
 
-### Por que streaming medallion
+**Decisão de domínio.** Dados de futebol em tempo real costumam ser pagos. O [StatsBomb Open Data](https://github.com/statsbomb/open-data) publica eventos profissionais gratuitamente — cada passe, condução e chute, com xG e coordenadas. É o dataset que a comunidade de football analytics usa de verdade. Usar ele transmite familiaridade com o ecossistema, não só com a tecnologia.
 
-O medallion Bronze→Silver→Gold é o padrão comprovado de lakehouse usado em produção no Databricks. O `pitchflow` aplica essa *mesma* estrutura a um stream contínuo em vez de uma tabela batch — reutilizando uma arquitetura que escala enquanto demonstra sua forma mais difícil, a de streaming.
+**Decisão de arquitetura.** Como dados *live* são pagos, faço o replay de uma partida real em ordem de relógio de jogo a velocidade configurável (60×, por padrão — uma partida de 90 minutos streama em ~90 segundos). Replay não é workaround: é um pattern legítimo de produção (é como se faz backfill e reprocessamento em sistemas de streaming), e torna o pipeline determinístico e reproduzível.
 
 ---
 
@@ -45,53 +42,50 @@ StatsBomb Open Data (eventos reais, gratuito)
                              ┌───────────────────────▼──────────────────────┐
                              │         Spark Structured Streaming            │
                              │                                               │
-                             │  Bronze  JSON cru (append, exactly-once)     │
-                             │     │    streaming/bronze.py                  │
+                             │  Bronze   JSON cru (append, exactly-once)     │
+                             │     │     streaming/bronze.py                 │
                              │     ▼                                         │
-                             │  Silver  colunas tipadas + dedup + watermark  │
-                             │     │    streaming/silver.py                  │
+                             │  Silver   colunas tipadas + dedup + watermark │
+                             │     │     streaming/silver.py                 │
                              │     ▼                                         │
-                             │  Gold    métricas ao vivo (MERGE upsert)     │
-                             │          streaming/gold.py                    │
-                             │   • xg_timeline   corrida de xG por minuto   │
-                             │   • match_state   placar + win probability    │
-                             │   • shots         mapa de chutes              │
-                             │   • momentum      dominância nos últimos 5min │
+                             │  Gold     métricas ao vivo (MERGE upsert)     │
+                             │           streaming/gold.py                   │
+                             │     • xg_timeline   corrida de xG por minuto  │
+                             │     • match_state   placar + win probability  │
+                             │     • shots         mapa de chutes            │
+                             │     • momentum      dominância nos últimos 5' │
                              └───────────────────────┬──────────────────────┘
                                                      │  Delta Lake (ACID)
                              ┌───────────────────────▼──────────────────────┐
                              │  Streamlit live dashboard (dashboard/app.py)  │
-                             │  auto-refresh a cada 3s · lê via deltalake   │
+                             │  auto-refresh a cada 3s · lê via deltalake    │
                              └──────────────────────────────────────────────┘
 ```
 
 ---
 
-## Stack
+## Stack & decisões
 
-| Camada | Ferramenta | Versão | Por quê |
-|--------|-----------|--------|---------|
-| Event log | **Redpanda** (API Kafka) | 24.1.x | Binário único, sem ZooKeeper, RAM baixa — semântica Kafka sem o peso operacional |
-| Kafka client | **confluent-kafka** | 2.4.0 | Cliente Python padrão de produção |
-| Stream processing | **Spark Structured Streaming** | 3.5.1 | Padrão de mercado, espelha o Databricks do dia a dia; watermarking + agregação stateful nativos |
-| Formato de tabela | **Delta Lake** | 3.2.0 | ACID, sink idempotente, time travel — o padrão de lakehouse |
-| Leitura no dashboard | **deltalake** (Python) | 0.18.x | Lê tabelas Delta sem Spark — rápido e leve para serving |
-| Dashboard | **Streamlit** + **Plotly** | 1.35 / 5.22 | Rápido de construir, auto-refresh, demoável ao vivo |
-| Containerização | **Docker Compose** | — | Um comando para subir tudo |
-| CI | **GitHub Actions** | — | Testes em todo push; badge verde |
-| Dados | **StatsBomb Open Data** | — | Gratuito, real, profissional, com xG e coordenadas |
+| Camada | Ferramenta | Por quê escolhi |
+|--------|-----------|-----------------|
+| Event log | **Redpanda** (API Kafka) | Binário único, sem ZooKeeper, RAM baixa. Semântica Kafka completa sem o peso operacional — ideal pra rodar em Codespace ou laptop. |
+| Stream processing | **Spark Structured Streaming** 3.5 | Padrão de mercado, espelha o Databricks que uso profissionalmente. Watermark e stateful aggregation são primitivas nativas — não precisa orquestrar à mão. |
+| Formato de tabela | **Delta Lake** 3.2 | ACID em arquivos de objeto, sink idempotente via `txnAppId`/`txnVersion`, time travel. É a peça que torna "lakehouse" um conceito real e não buzzword. |
+| Leitura no dashboard | **deltalake** (Python) | Lê Delta sem inicializar Spark — leve o suficiente pra refresh a cada 3s sem ficar caro. |
+| Dashboard | **Streamlit** + **Plotly** | Rápido de construir, demoável ao vivo, sem precisar empacotar frontend separado. Custo: visual default. Aceitável dado o escopo. |
+| Dados | **StatsBomb Open Data** | Gratuito, real, com xG e coordenadas. Único dataset público com essa granularidade. |
+
+A spec completa de requisitos, riscos e trade-offs está em [`docs/PROJECT.md`](docs/PROJECT.md).
 
 ---
 
 ## Quickstart
 
-### Opção 1 — GitHub Codespaces (recomendado)
+### GitHub Codespaces (recomendado)
 
-Clica em **Open in Codespaces** acima. O ambiente monta sozinho com Python, Docker e dependências instaladas.
+Clica em **Open in Codespaces** no topo. O `.devcontainer` instala Python, Docker e dependências sozinho.
 
-> **Gestão de cota:** a stack pesada (Spark + Kafka) usa uma máquina de 4-core (≈30h grátis/mês). Para trabalho leve (testes, edição) escolha 2-core. **Sempre delete** o Codespace ao terminar — parado ainda consome storage da cota.
-
-### Opção 2 — Local
+### Local
 
 ```bash
 git clone https://github.com/guisefe/pitchflow.git
@@ -100,123 +94,94 @@ cd pitchflow
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-# Java 17 é obrigatório para o Spark
-sudo apt-get install -y openjdk-17-jdk-headless           # Linux/Codespaces
-# brew install openjdk@17                                 # macOS
-
+sudo apt-get install -y openjdk-17-jdk-headless   # Spark precisa de Java 17
 cp .env.example .env
 ```
 
----
-
-## Como rodar o pipeline completo
-
-Você precisa de **5 terminais** abertos ao mesmo tempo (ou use `tmux`).
+### Rodando o pipeline (5 terminais)
 
 ```bash
-# Terminal 1 — infraestrutura
+# Terminal 1 — Redpanda + cria o tópico
 make up
 
-# Terminal 2 — Bronze: Kafka → Delta (fica rodando)
+# Terminal 2-4 — pipeline streaming (cada um fica rodando)
 make bronze
-
-# Terminal 3 — Silver: Bronze → tipado + deduplicado (fica rodando)
 make silver
-
-# Terminal 4 — Gold: Silver → métricas ao vivo (fica rodando)
 make gold
 
-# Terminal 5 — replay + dashboard
-make download   # cacheia a final Argentina x França (uma vez só)
-make replay     # streama os 4.407 eventos em ~2.6 min
-make dashboard  # abre em localhost:8501
+# Terminal 5 — alimenta + visualiza
+make replay
+make dashboard      # http://localhost:8501
 ```
 
-Abre **localhost:8501** e assiste a final se desenrolar em tempo real.
-
-Para ver os dados direto no Delta sem subir o dashboard:
-```bash
-make peek                              # Bronze
-make peek data/delta/silver/events     # Silver
-make peek data/delta/gold/match_state  # Gold
-```
+`make help` lista todos os comandos. `make reset` limpa estado para começar do zero.
 
 ---
 
-## Testes
+## A história por trás de um bug
 
-```bash
-make test      # 28 testes, roda em < 1s, sem broker, sem Spark
+Na primeira vez que o pipeline rodou ponta a ponta, o placar saiu **Argentina 7 × 5 França**. Não foi a final que eu lembro de assistir.
+
+Olhei a tabela `shots` da camada Gold. Sete chutes com xG idêntico de `0.7835`. Em uma partida real, isso é impossível — xG é um valor único por contexto. Mas reconheci o número: é o xG fixo de um pênalti no modelo do StatsBomb.
+
+E aí caiu a ficha: o jogo foi pra disputa de pênaltis. O StatsBomb marca esses eventos com `period = 5`. Eu estava contando os pênaltis do shootout como gols do jogo.
+
+A correção foi uma linha na camada Silver:
+
+```python
+.filter(F.col("period") <= 4)
 ```
 
-A lógica pura (relógio do jogo, classificação de eventos, xG, win probability) é testada isolada de qualquer infraestrutura. O producer é testado com um producer falso. A CI roda esses mesmos testes em todo push.
+Mas o aprendizado é maior que a linha. Por que não filtrei pelo *tipo* do chute (`Penalty`)? Porque o Messi marcou um pênalti aos 22 minutos — esse é gol legítimo. **Conhecer o domínio importa mais que conhecer o framework.** A diferença entre "pênalti de jogo" e "pênalti de shootout" não está em nenhuma documentação do Spark — está em saber futebol.
+
+Depois da correção, o placar foi 3-3 e o xG da Argentina caiu de 5.89 para 2.76 — próximo do valor reportado pela literatura analítica para aquela final. A win probability ficou em 50%, o que à primeira vista parecia bug. Não era: empate técnico, sem tempo restante. O modelo está sendo brutalmente honesto — *não posso prever um shootout. Isso seria outro modelo, com features diferentes.*
+
+Esse é o tipo de raciocínio que defendo numa entrevista.
 
 ---
 
-## Conceitos de streaming no código
+## Conceitos de streaming, mapeados pro código
 
-| Conceito | Onde aparece | Por quê importa |
-|----------|-------------|-----------------|
-| **Event replay** | `producer/replay.py` | Substitui dados ao vivo pagos; pattern real de backfill |
-| **Checkpoint** | `streaming/bronze.py` | O job recomeça exatamente onde parou — sem perda ou duplicação |
-| **Watermark** | `streaming/silver.py` | Limita o estado de dedup em memória; sem ele o estado cresce pra sempre |
+| Conceito | Onde está | Por quê importa |
+|----------|-----------|-----------------|
+| **Event replay** | `producer/replay.py` | Substitui dados live pagos; também é pattern real de backfill em produção |
+| **Checkpoint** | `streaming/bronze.py` | Job restart retoma exatamente onde parou — sem perda nem duplicação |
+| **Watermark** | `streaming/silver.py` | Limita o estado de dedup em memória; sem ele, o state cresce indefinidamente |
 | **Dedup stateful** | `streaming/silver.py` | `dropDuplicates(["event_id"])` com watermark — exactly-once no Silver |
-| **Idempotência Delta** | `streaming/silver.py` | `txnAppId + txnVersion` — replay do mesmo batch_id é no-op |
-| **foreachBatch + MERGE** | `streaming/gold.py` | Único jeito de fazer upsert em streaming com Delta |
-| **Running state** | `streaming/gold.py` | xG acumula por time/minuto sem reler tudo (o coração do streaming) |
-| **Sliding window** | `streaming/gold.py` | Momentum olha só os últimos 5 min — diferente do xG que é cumulativo |
-| **cache() / unpersist()** | `streaming/gold.py` | O mesmo batch é lido 4x — cache evita re-scan do Delta 4 vezes |
+| **Idempotência Delta** | `streaming/silver.py` | `txnAppId + txnVersion` — replay do mesmo `batch_id` é no-op |
+| **foreachBatch + MERGE** | `streaming/gold.py` | Único caminho oficial pra upsert em streaming com Delta |
+| **Running state** | `streaming/gold.py` | xG acumula por time/minuto sem reler tudo — coração do streaming |
+| **Sliding window** | `streaming/gold.py` | Momentum olha só os últimos 5 min, diferente do xG que é cumulativo |
 
 ---
 
-## Estrutura do repositório
+## Qualidade
 
-```
-pitchflow/
-├── producer/               # Fase 1 — replay producer
-│   ├── config.py           # variáveis de ambiente
-│   ├── download.py         # download + cache StatsBomb
-│   ├── replay.py           # lógica de replay (pura, testável)
-│   └── tests/
-├── streaming/              # Fase 2 — Spark Structured Streaming
-│   ├── session.py          # fábrica da SparkSession (Delta + Kafka)
-│   ├── config.py           # caminhos das tabelas e checkpoints
-│   ├── bronze.py           # Kafka → Bronze Delta (append)
-│   ├── silver.py           # Bronze → Silver (parse + dedup + watermark)
-│   ├── gold.py             # Silver → Gold (4 métricas via MERGE)
-│   ├── metrics.py          # funções puras: xG, momentum, win prob
-│   ├── peek.py             # inspetor rápido de tabelas Delta
-│   └── tests/
-├── dashboard/
-│   └── app.py              # Streamlit live dashboard
-├── docs/
-│   └── PROJECT.md          # spec completa: requisitos, riscos, decisões
-├── docker-compose.yml      # Redpanda + console
-├── Makefile                # todos os comandos do projeto
-└── .devcontainer/          # Codespaces one-click
-```
+- **28 testes unitários em < 1 segundo**, sem broker e sem Spark. A lógica de negócio (relógio do jogo, classificação de eventos, xG, win probability) está isolada da infraestrutura em `streaming/metrics.py`, então é testável sozinha.
+- **Lint (ruff) + tests rodam em todo push** via GitHub Actions. CI fica vermelha se algo regredir.
+- O Bronze é **schema-on-read** (JSON cru). Isso permite reprocessar Silver/Gold com regras novas sem precisar re-ingerir do Kafka — foi essa decisão arquitetural que permitiu corrigir o bug do shootout sem perder dado.
 
 ---
 
-## Variáveis de ambiente
+## Roadmap
 
-| Variável | Padrão | Significado |
-|----------|--------|-------------|
-| `MATCH_ID` | `3869685` | Partida StatsBomb (padrão: Final da Copa 2022) |
-| `REPLAY_SPEED` | `60` | Multiplicador de velocidade (60 = 90min em ~90s) |
-| `MAX_SLEEP_SECONDS` | `3` | Teto de espera entre eventos (limita pausas do intervalo) |
-| `KAFKA_BROKER` | `localhost:19092` | Endereço do Redpanda |
-| `MATCH_TOPIC` | `match.events` | Tópico Kafka de destino |
+- ✅ Producer + replay (Fase 1)
+- ✅ Bronze → Silver → Gold streaming medallion (Fase 2)
+- ✅ Dashboard ao vivo (Fase 3)
+- 🔜 Catálogo de partidas (todas as ~600 disponíveis no StatsBomb open data, incluindo a carreira do Messi)
+- 🔜 Tab "Player Spotlight" — análise individual por jogador (shot map, pass map, touch heatmap)
+- 🔜 Visual dark-broadcast (paleta neon, fonte mono — fugindo do default Streamlit)
+- 🌟 **Stretch:** camada de IA com LLM gerando comentário tático em eventos-chave
 
 ---
 
-## Atribuição de dados
+## Atribuição
 
-Os dados de futebol são fornecidos pelo **StatsBomb** via [open-data](https://github.com/statsbomb/open-data), gratuito para uso em pesquisa e projetos públicos. Este projeto não tem afiliação com o StatsBomb. Conforme o acordo de uso, qualquer análise derivada desses dados credita o StatsBomb como fonte.
+Dados de futebol fornecidos pelo **StatsBomb** via [open-data](https://github.com/statsbomb/open-data), gratuito para pesquisa e projetos públicos. Este projeto não tem afiliação com o StatsBomb. Análises derivadas creditam o StatsBomb conforme o acordo de uso.
 
 ---
 
 ## Autor
 
-**Guilherme Senis** — Data & AI Engineer
+**Guilherme Senis O. Fernandes** — Data & AI Engineer · Bauru, Brasil
 [github.com/guisefe](https://github.com/guisefe) · gui.senis635@gmail.com
