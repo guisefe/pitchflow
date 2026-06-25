@@ -28,7 +28,7 @@ replay:
 	python -m producer.replay
 
 test:
-	pytest producer/tests/ -v --cov=producer --cov-report=term-missing
+	python -m pytest producer/tests/ -v --cov=producer --cov-report=term-missing
 
 clean:
 	docker compose down -v
@@ -40,3 +40,10 @@ bronze:
 
 peek:
 	python -m streaming.peek
+
+.PHONY: silver test
+silver:
+	python -m streaming.silver
+
+test:
+	python -m pytest streaming/tests/ producer/tests/ -v --tb=short
